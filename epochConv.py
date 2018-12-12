@@ -2,11 +2,14 @@ import argparse
 import gzip
 import datetime
 import os
+import pytz
 
 EPOCH_TIME = 5 #assumed EPOCH time in previous
 WRITE_BUFFER = 100 # the number of conversions done before the results are logged into the outputfile
 ALLOWED_PLAIN_EXTENSIONS = [".csv", ".tsv", ".txt"] # non compressed file types this script assumes to be able to operate with.
 PREFIX_SET = False
+TIMEZONE = "Europe/London"
+# TODO Daylight Savings time conversion, when inside measuring area
 """
 Function expects the header line to be in the following format:
 [w] [w] [w] [start_date] [start_time] [w] [end_date] [end_time] [w] [w] [w] [sample_rate] [w]
@@ -15,9 +18,9 @@ with [w] being any continuous string, which will be ignored
 whilst times are expected as HH:MM:SS
 
 """
-def getTimeStamp(headerLine, offsetLine):
+def getTimeStamp(headerLine, offsetLine, dayLightSavingsTime):
     timeStamp = ""
-    headerInfo = headerLine.split(" ")
+    headerInfo = str(headerLine).split(" ")
     startDate = headerInfo[3]
     startTime = headerInfo[4]
     endDate = headerInfo[6]
@@ -29,8 +32,16 @@ def getTimeStamp(headerLine, offsetLine):
     offsetSec = offsetLine * EPOCH_TIME
     offset = datetime.timedelta(seconds= offsetSec)
     startInfo = startDate + " " + startTime
-    startDateTime = datetime.datetime.strptime(startInfo, '%Y-%m-%d %H:%M:%S')
+    gmt = pytz.timezone(TIMEZONE)
+    startDateTime = datetime.datetime.strptime(startInfo, '%Y-%m-%d %H:%M:%S').astimezone(gmt)
     currentTime = startDateTime + offset
+    if dayLightSavingsTime:
+        nullTime = datetime.timedelta(0)
+        if ((startDateTime.dst() != nullTime) & (currentTime.dst() == nullTime)):
+            # dst ended during the measurement, take one hour of the offset
+            currentTime = currentTime - datetime.timedelta(hours=1)
+        elif ((startDateTime.dst() == nullTime) & (currentTime.dst() != nullTime)):
+            currentTime = currentTime + datetime.timedelta(hours=1)
     timeStamp = currentTime.strftime("%Y-%m-%dT%H:%M:%S")
 
     #"{}-{}-{}T{}:{}:{}".format(currentTime.year, currentTime.month, currentTime.day, currentTime.hour,
@@ -39,7 +50,7 @@ def getTimeStamp(headerLine, offsetLine):
 
 
 def header(headerLine, epoch):
-    oldheaderString = headerLine.split(" - ")
+    oldheaderString = str(headerLine).split(" - ")
     startInfo = datetime.datetime.strptime(oldheaderString[1], '%Y-%m-%d %H:%M:%S')
     endInfo = datetime.datetime.strptime(oldheaderString[2], '%Y-%m-%d %H:%M:%S')
     newHeader = "Measurement from " + startInfo.strftime("%Y-%m-%d %H:%M:%S")
@@ -54,7 +65,7 @@ def getOutFileName(filename, outdir, epoch, prefix, keepName):
     outdir = os.path.realpath(outdir)
     if prefix != "":
         if keepName:
-            outfile = os.path.join(outdir, os.path.splitext(os.path.basename(filename))[0] + "_" + prefix + ".tsv")
+            outfile = os.path.join(outdir,prefix + "_" +os.path.splitext(os.path.basename(filename))[0] +".tsv")
         else:
             outfile = os.path.join(outdir, prefix + ".tsv")
     else:
@@ -64,7 +75,7 @@ def getOutFileName(filename, outdir, epoch, prefix, keepName):
 
 
 
-def workFile(filename, epoch, outdir, prefix, keepName):
+def workFile(filename, epoch, outdir, prefix, keepName, daylightSavingsTime):
     #
     # how many lines need to be read to convert one 5 second epoch to the new epoch time EPOCH
     linesNeeded = epoch/EPOCH_TIME
@@ -82,8 +93,10 @@ def workFile(filename, epoch, outdir, prefix, keepName):
     except OSError:
         pass
     # find out whether to gzip open or to plain open it
-    if extension == ".gz":
+    compressed = False
+    if (extension == ".gz") & (".csv.gz" in os.path.basename(filename)):
         file = gzip.open(filename, "r")
+        compressed = True
     elif (extension in ALLOWED_PLAIN_EXTENSIONS):
         file = open(filename, "r")
     else:
@@ -91,6 +104,8 @@ def workFile(filename, epoch, outdir, prefix, keepName):
         return
     try:
         for line in file:
+            if compressed:
+                line = line.decode("utf-8")
             if headerlinefound == False:
                 headerlinefound= True
                 headerLine = line
@@ -102,7 +117,7 @@ def workFile(filename, epoch, outdir, prefix, keepName):
             lineCount = lineCount + 1
             if (len(lineAccumulator) >= linesNeeded):
                 try:
-                    resultLineAcc.append(epochConversion(lineAccumulator, getTimeStamp(headerLine,(lineCount - (len(lineAccumulator)-1)))))
+                    resultLineAcc.append(epochConversion(lineAccumulator, getTimeStamp(headerLine,(lineCount - (len(lineAccumulator)-1)), daylightSavingsTime)))
                     lineAccumulator.clear()
                 except IndexError:
                     print("ERROR: Line around line number" + lineCount + " seems corrupted and missing a value. "
@@ -127,7 +142,7 @@ def epochConversion(lines, timestamp):
     lineCount = 0
     values = []
     for line in lines:
-        lineContent = line.split(",")
+        lineContent = str(line).split(",")
         values.append(float(lineContent[0]))
         if lineContent[1].strip() == "1":
             imputedCount = imputedCount + 1
@@ -170,19 +185,18 @@ def main():
                                                        "This should be a multiple of the orginal epoch time of 5 "
                                                                   "seconds.")
     parser.add_argument("outputDir", metavar="OD", help="output directory for the results")
-    parser.add_argument("-p", metavar="Prefix", required= False, help= "prefix for the output files. Otherwise the old name "
-                                                                 "will be used, with the addition of _avg_[epoch].")
-    parser.add_argument("-id", action="store_true" ,required= False, help= "If the original filenames are a specific id, which "
-                                                                 "should be conserved, this flag should be set. It does"
-                                                                 " not need to be used, when no prefix is specified")
+    parser.add_argument("-p", metavar="Prefix", required= False, help= "prefix for the output files. Otherwise the "
+                                                                       "old name will be used, with the addition of "
+                                                                       "_avg_[epoch].")
+    parser.add_argument("-id", action="store_true" , help= "If the original filenames are a specific id, which "
+                                                           "should be conserved, this flag should be set. It does"
+                                                           " not need to be used, when no prefix is specified")
+    parser.add_argument("-d", action="store_true", help= "If set, the timestamps will change according to "
+                                                         "daylight saving time.")
     args = parser.parse_args()
     inputFiles = args.inlis
     epoch = int(args.epochTime)
     outdir = args.outputDir
-    if args.id:
-        keepName = True
-    else:
-        keepName = False
 
     # initial sanity check
     if not((epoch % EPOCH_TIME) == 0):
@@ -198,8 +212,8 @@ def main():
     # get input files into a list
     inList = getFiles(inputFiles)
     prefix = ""
-    if args.Prefix:
-        prefix = args.Prefix
+    if args.p:
+        prefix = args.p
 
     index = 0
     for file in inList:
@@ -209,12 +223,12 @@ def main():
             continue
         start= datetime.datetime.now()
         print("STATUS: Analyzing file " + file)
-        if args.Prefix:
+        if args.p:
             prefixIndex = "{}_{:04d}".format(prefix, index)
         else:
             prefixIndex = ""
         try:
-            workFile(file, epoch, outdir, prefixIndex, keepName)
+            workFile(file, epoch, outdir, prefixIndex, args.id, args.d)
         except FileNotFoundError:
             print("ERROR: The file: " + file + " could not be found under the specified path.")
         finish = datetime.datetime.now()
