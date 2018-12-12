@@ -147,6 +147,7 @@ def writePart(outfile, content):
 
 
 def getFiles(inputFiles):
+
     file = open(inputFiles, "r")
     fileList = []
     dir = os.path.dirname(os.path.realpath(inputFiles))
@@ -177,6 +178,10 @@ def main():
         return
     if (epoch / EPOCH_TIME < 1):
         print("ERROR: requested epoch to short to be generated from given data")
+        return
+    extension = os.path.splitext(inputFiles)[1]
+    if (extension != ".txt"):
+        print("ERROR: the specified list of input files of the " + extension + " does not match the required type of .txt")
         return
     # get input files into a list
     inList = getFiles(inputFiles)
