@@ -42,10 +42,10 @@ def header(headerLine, epoch):
     oldheaderString = headerLine.split(" - ")
     startInfo = datetime.datetime.strptime(oldheaderString[1], '%Y-%m-%d %H:%M:%S')
     endInfo = datetime.datetime.strptime(oldheaderString[2], '%Y-%m-%d %H:%M:%S')
-    newHeader = oldheaderString[0]
-    newHeader = newHeader + " - " + startInfo.strftime("%Y-%m-%d %H:%M:%S")
-    newHeader = newHeader + " - " + endInfo.strftime("%Y-%m-%d %H:%M:%S")
-    newHeader = newHeader + " - sampleRate = " + str(epoch)
+    newHeader = "Measurement from " + startInfo.strftime("%Y-%m-%d %H:%M:%S")
+    newHeader = newHeader + " to " + endInfo.strftime("%Y-%m-%d %H:%M:%S")
+    newHeader = newHeader + "\t" + oldheaderString[0] + " - sampleRate = " + str(epoch)
+    newHeader = newHeader + "\t" + "fraction of imputed data"
 
     return newHeader
 
@@ -132,7 +132,7 @@ def epochConversion(lines, timestamp):
     average = sum(values)/ float(len(values))
     # all values are read
     # create new line
-    resultLine = "\n{}\t{}\t{}".format(timestamp, "{0:.1f}".format(average), "{0:.1f}".format(imputedPerc))
+    resultLine = "\n{}\t{}\t{}".format(timestamp, "{0:.1f}".format(average), "{0:.2f}".format(imputedPerc))
     return resultLine
 
 def writePart(outfile, content):
