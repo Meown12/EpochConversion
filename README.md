@@ -14,8 +14,8 @@ Run via the terminal using
     python epochConv.py [IL] [t] [OD]
 
 where the arguments represent the following:
-    * IL : A plain text document containing 
+   + IL : A plain text document containing 
            the list of files to be converted
-    * t : epoch duration to convert to. This should be a
+   + t : epoch duration to convert to. This should be a
           multiple of the orginal epoch time of 5 seconds.
-    * OD : output directory for the results
+   + OD : output directory for the results
