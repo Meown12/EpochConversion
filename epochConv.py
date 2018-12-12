@@ -50,10 +50,13 @@ def header(headerLine, epoch):
     return newHeader
 
 
-def getOutFileName(filename, outdir, epoch, prefix):
+def getOutFileName(filename, outdir, epoch, prefix, keepName):
     outdir = os.path.realpath(outdir)
     if prefix != "":
-        outfile = os.path.join(outdir, prefix + ".tsv")
+        if keepName:
+            outfile = os.path.join(outdir, os.path.splitext(os.path.basename(filename))[0] + "_" + prefix + ".tsv")
+        else:
+            outfile = os.path.join(outdir, prefix + ".tsv")
     else:
         outname = os.path.splitext(os.path.basename(filename))[0] + "_avg_{}.tsv".format(epoch)
         outfile = os.path.join(outdir, outname)
@@ -61,7 +64,7 @@ def getOutFileName(filename, outdir, epoch, prefix):
 
 
 
-def workFile(filename, epoch, outdir, prefix):
+def workFile(filename, epoch, outdir, prefix, keepName):
     #
     # how many lines need to be read to convert one 5 second epoch to the new epoch time EPOCH
     linesNeeded = epoch/EPOCH_TIME
@@ -70,8 +73,9 @@ def workFile(filename, epoch, outdir, prefix):
     lineCount = 0
     headerlinefound = False
     headerLine = ""
+    outdir = os.path.realpath(outdir)
     extension= os.path.splitext(filename)[1]
-    outputFile = getOutFileName(filename, outdir, epoch, prefix)  #TODO should they have identical names?
+    outputFile = getOutFileName(filename, outdir, epoch, prefix, keepName)  #TODO should they have identical names?
     # if this file exists already, delete it.
     try:
         os.remove(outputFile)
@@ -96,7 +100,7 @@ def workFile(filename, epoch, outdir, prefix):
                 #TODO print header on top of file
             lineAccumulator.append(line)
             lineCount = lineCount + 1
-            if (len(lineAccumulator) == linesNeeded):
+            if (len(lineAccumulator) >= linesNeeded):
                 try:
                     resultLineAcc.append(epochConversion(lineAccumulator, getTimeStamp(headerLine,(lineCount - (len(lineAccumulator)-1)))))
                     lineAccumulator.clear()
@@ -108,7 +112,7 @@ def workFile(filename, epoch, outdir, prefix):
                     print("ERROR: time stamp creation failed, check sample rate defined equals the program defined sampling "
                           "rate ")
                     return
-            if len(resultLineAcc) == WRITE_BUFFER:
+            if len(resultLineAcc) >= WRITE_BUFFER:
                 writePart(outputFile, resultLineAcc)
                 resultLineAcc.clear()
         # write the remaining details into the output file
@@ -166,11 +170,19 @@ def main():
                                                        "This should be a multiple of the orginal epoch time of 5 "
                                                                   "seconds.")
     parser.add_argument("outputDir", metavar="OD", help="output directory for the results")
-    parser.add_argument("-p", "--Prefix", required= False, help= "prefix for the output files. Otherwise the old name will be used, with the addition of _avg_[epoch].")
+    parser.add_argument("-p", metavar="Prefix", required= False, help= "prefix for the output files. Otherwise the old name "
+                                                                 "will be used, with the addition of _avg_[epoch].")
+    parser.add_argument("-id", action="store_true" ,required= False, help= "If the original filenames are a specific id, which "
+                                                                 "should be conserved, this flag should be set. It does"
+                                                                 " not need to be used, when no prefix is specified")
     args = parser.parse_args()
     inputFiles = args.inlis
     epoch = int(args.epochTime)
-    outdir = os.path.realpath(args.outputDir)
+    outdir = args.outputDir
+    if args.id:
+        keepName = True
+    else:
+        keepName = False
 
     # initial sanity check
     if not((epoch % EPOCH_TIME) == 0):
@@ -202,7 +214,7 @@ def main():
         else:
             prefixIndex = ""
         try:
-            results = workFile(file, epoch, outdir, prefixIndex)
+            workFile(file, epoch, outdir, prefixIndex, keepName)
         except FileNotFoundError:
             print("ERROR: The file: " + file + " could not be found under the specified path.")
         finish = datetime.datetime.now()
