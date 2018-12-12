@@ -136,7 +136,6 @@ def epochConversion(lines, timestamp):
     return resultLine
 
 def writePart(outfile, content):
-    print("opening file:" + outfile)
     file = open(outfile, "a")
     try:
         for line in content:
