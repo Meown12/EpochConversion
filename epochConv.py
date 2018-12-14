@@ -10,7 +10,7 @@ ALLOWED_PLAIN_EXTENSIONS = [".csv", ".txt"] # non compressed file types this scr
 PREFIX_SET = False
 TIMEZONE = "Europe/London"
 
-#TODO sometime lines could be incomplete try to sensibly ignore it and if all in a section are nonexistant use a NA character
+#TODO allow to not overwrite data (e.g. that was created successfully before)
 def getTimeStamp(headerLine, offsetLine, dayLightSavingsTime=False):
     """
     getTimeStamp
@@ -104,7 +104,7 @@ def getOutFileName(filename, outdir, epoch, prefix="", keepName=False):
 
 
 
-def workFile(filename, epoch, outdir, prefix="", keepName=False, daylightSavingsTime=False, noConsoleOutput=False):
+def workFile(filename, epoch, outdir, prefix="", keepName=False, daylightSavingsTime=False, noConsoleOutput=False, noOverwrite=False):
     """
     workFile is the central function to convert a file with one epoch to another epoch, not overwriting the original data
     it offers a few options in regards to how the new file should behave. It can be specified, whether a daylight
@@ -135,6 +135,9 @@ def workFile(filename, epoch, outdir, prefix="", keepName=False, daylightSavings
     outputFile = getOutFileName(filename, outdir, epoch, prefix, keepName)
     # if this file exists already, delete it.
     try:
+        if noOverwrite & (os.path.isfile(outputFile)):
+            print("STATUS: File " + outputFile + " does exist already, it will be skipped.")
+            return
         os.remove(outputFile)
     except OSError:
         pass
@@ -240,11 +243,19 @@ def getFiles(inputFiles):
     :param inputFiles: the file containing the paths
     :return: a list object containing the absolute paths
     """
-    file = open(inputFiles, "r")
     fileList = []
-    dir = os.path.dirname(os.path.realpath(inputFiles))
-    for line in file:
-        fileList.append(os.path.join(dir,line.strip(" \n\t")))
+    if os.path.isfile(inputFiles):
+        file = open(inputFiles, "r")
+        dir = os.path.dirname(os.path.realpath(inputFiles))
+        for line in file:
+            fileList.append(os.path.join(dir,line.strip(" \n\t")))
+    else:
+        # it is a directory
+        for file in os.listdir(inputFiles):
+            fileName = os.path.join(inputFiles, file)
+            if (os.path.isfile(fileName) & (
+                    (os.path.splitext(fileName)[1] == ".csv") | (os.path.splitext(fileName)[1] == ".gz"))):
+                fileList.append(fileName)
     return fileList
 
 
@@ -269,6 +280,10 @@ def main():
                                                            " not need to be used, when no prefix is specified")
     parser.add_argument("-d", action="store_true", help= "If set, the timestamps will change according to "
                                                          "daylight saving time.")
+    parser.add_argument("-o", action="store_true", help= "If a file already exists e.g. from a previous run it will "
+                                                         "be skipped")
+    # parser.add_argument("-f", action="store_true", help= "When this option is selected the input in IL will be treated "
+    #                                                      "as a directory of files instead of a file")
     parser.add_argument("-n", action="store_true", help="This option should be selected if no console output should be "
                                                         "made, e.g. when no non-shared console is available. In this "
                                                         "case only error messages will be displayed.")
@@ -287,7 +302,7 @@ def main():
             print("ERROR: requested epoch to short to be generated from given data")
         return
     extension = os.path.splitext(inputFiles)[1]
-    if (extension != ".txt"):
+    if ((extension != ".txt") & (os.path.isfile(inputFiles))):
         if not args.n:
             print("ERROR: the specified list of input files of the " + extension + " does not match the required type of .txt")
         return
@@ -319,7 +334,7 @@ def main():
         else:
             prefixIndex = ""
         try:
-            workFile(file, epoch, outdir, prefixIndex, args.id, args.d, args.n)
+            workFile(file, epoch, outdir, prefixIndex, args.id, args.d, args.n, args.o)
         except FileNotFoundError:
             if not args.n:
                 print("ERROR: The file: " + file + " could not be found under the specified path.")
