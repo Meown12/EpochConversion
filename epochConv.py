@@ -6,7 +6,7 @@ import pytz
 
 EPOCH_TIME = 5 #assumed EPOCH time in previous
 WRITE_BUFFER = 100 # the number of conversions done before the results are logged into the outputfile
-ALLOWED_PLAIN_EXTENSIONS = [".csv", ".tsv", ".txt"] # non compressed file types this script assumes to be able to operate with.
+ALLOWED_PLAIN_EXTENSIONS = [".csv", ".txt"] # non compressed file types this script assumes to be able to operate with.
 PREFIX_SET = False
 TIMEZONE = "Europe/London"
 # TODO Daylight Savings time conversion, when inside measuring area
@@ -75,7 +75,7 @@ def getOutFileName(filename, outdir, epoch, prefix, keepName):
 
 
 
-def workFile(filename, epoch, outdir, prefix, keepName, daylightSavingsTime, noConsoleOutput):
+def workFile(filename, epoch, outdir, prefix="", keepName=False, daylightSavingsTime=False, noConsoleOutput=False):
     #
     # how many lines need to be read to convert one 5 second epoch to the new epoch time EPOCH
     linesNeeded = epoch/EPOCH_TIME
