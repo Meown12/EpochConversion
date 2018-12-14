@@ -42,11 +42,11 @@ def getTimeStamp(headerLine, offsetLine, dayLightSavingsTime=False):
     currentTime = startDateTime + offset
     if dayLightSavingsTime:
         nullTime = datetime.timedelta(0)
-        if ((startDateTime.dst() != nullTime) & (currentTime.dst() == nullTime)):
+        if ((startDateTime.astimezone(gmt).dst() == nullTime) & (currentTime.astimezone(gmt).dst() == datetime.timedelta(hours=1))):
             # dst ended during the measurement, take one hour of the offset
-            currentTime = currentTime - datetime.timedelta(hours=1)
-        elif ((startDateTime.dst() == nullTime) & (currentTime.dst() != nullTime)):
             currentTime = currentTime + datetime.timedelta(hours=1)
+        elif ((startDateTime.astimezone(gmt).dst() == datetime.timedelta(hours=1)) & (currentTime.astimezone(gmt).dst() == nullTime)):
+            currentTime = currentTime - datetime.timedelta(hours=1)
     timeStamp = currentTime.strftime("%Y-%m-%dT%H:%M:%S")
 
     #"{}-{}-{}T{}:{}:{}".format(currentTime.year, currentTime.month, currentTime.day, currentTime.hour,
@@ -290,7 +290,7 @@ def main():
     try:
         inList = getFiles(inputFiles)
         if not args.n:
-            print("STATUS: " + len(inList) + " files were detected and will be converted.")
+            print("STATUS: " + str(len(inList)) + " files were detected and will be converted.")
     except IOError:
         if not args.n:
             print("ERROR: could not read the file of input files "+ inputFiles + ". Please check.")
