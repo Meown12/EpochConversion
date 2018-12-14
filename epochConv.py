@@ -75,7 +75,7 @@ def getOutFileName(filename, outdir, epoch, prefix, keepName):
 
 
 
-def workFile(filename, epoch, outdir, prefix, keepName, daylightSavingsTime):
+def workFile(filename, epoch, outdir, prefix, keepName, daylightSavingsTime, noConsoleOutput):
     #
     # how many lines need to be read to convert one 5 second epoch to the new epoch time EPOCH
     linesNeeded = epoch/EPOCH_TIME
@@ -100,7 +100,8 @@ def workFile(filename, epoch, outdir, prefix, keepName, daylightSavingsTime):
     elif (extension in ALLOWED_PLAIN_EXTENSIONS):
         file = open(filename, "r")
     else:
-        print("ERROR: Unknown file format: " + extension + ", file skipped.")
+        if not noConsoleOutput:
+            print("ERROR: Unknown file format: " + extension + ", file skipped.")
         return
     try:
         for line in file:
@@ -120,19 +121,21 @@ def workFile(filename, epoch, outdir, prefix, keepName, daylightSavingsTime):
                     resultLineAcc.append(epochConversion(lineAccumulator, getTimeStamp(headerLine,(lineCount - (len(lineAccumulator)-1)), daylightSavingsTime)))
                     lineAccumulator.clear()
                 except IndexError:
-                    print("ERROR: Line around line number" + lineCount + " seems corrupted and missing a value. "
+                    if not noConsoleOutput:
+                        print("ERROR: Line around line number" + lineCount + " seems corrupted and missing a value. "
                                                                          "File conversion was aborted.")
                     return
                 except AttributeError:
-                    print("ERROR: time stamp creation failed, check sample rate defined equals the program defined sampling "
+                    if not noConsoleOutput:
+                        print("ERROR: time stamp creation failed, check sample rate defined equals the program defined sampling "
                           "rate ")
                     return
             if len(resultLineAcc) >= WRITE_BUFFER:
-                writePart(outputFile, resultLineAcc)
+                writePart(outputFile, resultLineAcc, noConsoleOutput)
                 resultLineAcc.clear()
         # write the remaining details into the output file
         if resultLineAcc:
-            writePart(outputFile, resultLineAcc)
+            writePart(outputFile, resultLineAcc, noConsoleOutput)
     finally:
         file.close()
     # generate new timestamp
@@ -154,13 +157,14 @@ def epochConversion(lines, timestamp):
     resultLine = "\n{}\t{}\t{}".format(timestamp, "{0:.1f}".format(average), "{0:.2f}".format(imputedPerc))
     return resultLine
 
-def writePart(outfile, content):
+def writePart(outfile, content, noConsoleOutput):
     file = open(outfile, "a")
     try:
         for line in content:
             file.write(line)
     except:
-        print("ERROR: Failed to write to: " + outfile + " please check file.")
+        if not noConsoleOutput:
+            print("ERROR: Failed to write to: " + outfile + " please check file.")
     finally:
         file.close
 
@@ -193,6 +197,9 @@ def main():
                                                            " not need to be used, when no prefix is specified")
     parser.add_argument("-d", action="store_true", help= "If set, the timestamps will change according to "
                                                          "daylight saving time.")
+    parser.add_argument("-n", action="store_true", help="This option should be selected if no console output should be "
+                                                        "made, e.g. when no non-shared console is available. In this "
+                                                        "case only error messages will be displayed.")
     args = parser.parse_args()
     inputFiles = args.inlis
     epoch = int(args.epochTime)
@@ -200,14 +207,17 @@ def main():
 
     # initial sanity check
     if not((epoch % EPOCH_TIME) == 0):
-        print("ERROR: entered epoch time does not fit base epoch time")
+        if(not args.n):
+            print("ERROR: entered epoch time does not fit base epoch time")
         return
     if (epoch / EPOCH_TIME < 1):
-        print("ERROR: requested epoch to short to be generated from given data")
+        if not args.n:
+            print("ERROR: requested epoch to short to be generated from given data")
         return
     extension = os.path.splitext(inputFiles)[1]
     if (extension != ".txt"):
-        print("ERROR: the specified list of input files of the " + extension + " does not match the required type of .txt")
+        if not args.n:
+            print("ERROR: the specified list of input files of the " + extension + " does not match the required type of .txt")
         return
     # get input files into a list
     inList = getFiles(inputFiles)
@@ -218,25 +228,29 @@ def main():
     index = 0
     for file in inList:
         if os.path.dirname(file) == outdir:
-            print("ERROR: Due to the input and output directory being the same this file could not be processed, "
+            if not args.n:
+                print("ERROR: Due to the input and output directory being the same this file could not be processed, "
                   "withouth risking overwriting.")
             continue
         start= datetime.datetime.now()
-        print("STATUS: Analyzing file " + file)
+        if not args.n:
+            print("STATUS: Analyzing file " + file)
         if args.p:
             prefixIndex = "{}_{:04d}".format(prefix, index)
         else:
             prefixIndex = ""
         try:
-            workFile(file, epoch, outdir, prefixIndex, args.id, args.d)
+            workFile(file, epoch, outdir, prefixIndex, args.id, args.d, args.n)
         except FileNotFoundError:
-            print("ERROR: The file: " + file + " could not be found under the specified path.")
+            if not args.n:
+                print("ERROR: The file: " + file + " could not be found under the specified path.")
         finish = datetime.datetime.now()
         timeUsed = finish - start
-        if PREFIX_SET:
-            print("STATUS: Finished file " + prefixIndex + " , saved in " + outdir + " in " + str(timeUsed))
-        else:
-            print("STATUS: Finished file " + file + " , saved in " + outdir + " in " + str(timeUsed))
+        if not args.n:
+            if PREFIX_SET:
+                print("STATUS: Finished file " + prefixIndex + " , saved in " + outdir + " in " + str(timeUsed))
+            else:
+                print("STATUS: Finished file " + file + " , saved in " + outdir + " in " + str(timeUsed))
         index = index +1
 # main script
 if __name__ == "__main__":
