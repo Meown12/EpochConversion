@@ -4,13 +4,13 @@ import datetime
 import os
 import pytz
 
-EPOCH_TIME = 5 #assumed EPOCH time in previous
+EPOCH_TIME = 5 # assumed EPOCH time in previous
 WRITE_BUFFER = 100 # the number of conversions done before the results are logged into the outputfile
 ALLOWED_PLAIN_EXTENSIONS = [".csv", ".txt"] # non compressed file types this script assumes to be able to operate with.
 PREFIX_SET = False
 TIMEZONE = "Europe/London"
 
-
+#TODO sometime lines could be incomplete try to sensibly ignore it and if all in a section are nonexistant use a NA character
 def getTimeStamp(headerLine, offsetLine, dayLightSavingsTime=False):
     """
     getTimeStamp
@@ -42,15 +42,15 @@ def getTimeStamp(headerLine, offsetLine, dayLightSavingsTime=False):
     currentTime = startDateTime + offset
     if dayLightSavingsTime:
         nullTime = datetime.timedelta(0)
-        if ((startDateTime.astimezone(gmt).dst() == nullTime) & (currentTime.astimezone(gmt).dst() == datetime.timedelta(hours=1))):
-            # dst ended during the measurement, take one hour of the offset
+        oneHour = datetime.timedelta(hours=1)
+        if ((startDateTime.astimezone(gmt).dst() == nullTime) & (currentTime.astimezone(gmt).dst() == oneHour)):
+            # dst started during the measurement, add one hour to the offset
             currentTime = currentTime + datetime.timedelta(hours=1)
-        elif ((startDateTime.astimezone(gmt).dst() == datetime.timedelta(hours=1)) & (currentTime.astimezone(gmt).dst() == nullTime)):
+        elif ((startDateTime.astimezone(gmt).dst() == oneHour) & (currentTime.astimezone(gmt).dst() == nullTime)):
+            # dst ended during the measurement, take one hour off the offset
             currentTime = currentTime - datetime.timedelta(hours=1)
     timeStamp = currentTime.strftime("%Y-%m-%dT%H:%M:%S")
 
-    #"{}-{}-{}T{}:{}:{}".format(currentTime.year, currentTime.month, currentTime.day, currentTime.hour,
-                 #                          currentTime.minute, currentTime.second)
     return timeStamp
 
 
@@ -183,7 +183,6 @@ def workFile(filename, epoch, outdir, prefix="", keepName=False, daylightSavings
             writePart(outputFile, resultLineAcc, noConsoleOutput)
     finally:
         file.close()
-    # generate new timestamp
 
 
 def epochConversion(lines, timestamp):
@@ -196,14 +195,20 @@ def epochConversion(lines, timestamp):
     imputedCount = 0
     lineCount = 0
     values = []
+    average= -1
+    imputedPerc = -1
     for line in lines:
         lineContent = str(line).split(",")
+        if len(lineContent) != 2:
+            # the line does not match what we would expect
+            continue
         values.append(float(lineContent[0]))
         if lineContent[1].strip() == "1":
             imputedCount = imputedCount + 1
         lineCount = lineCount + 1
-    imputedPerc = imputedCount / lineCount
-    average = sum(values)/ float(len(values))
+    if len(values) != 0:
+        imputedPerc = imputedCount / lineCount
+        average = sum(values)/ float(len(values))
     # all values are read
     # create new line
     resultLine = "\n{}\t{}\t{}".format(timestamp, "{0:.1f}".format(average), "{0:.2f}".format(imputedPerc))
