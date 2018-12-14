@@ -9,16 +9,21 @@ WRITE_BUFFER = 100 # the number of conversions done before the results are logge
 ALLOWED_PLAIN_EXTENSIONS = [".csv", ".txt"] # non compressed file types this script assumes to be able to operate with.
 PREFIX_SET = False
 TIMEZONE = "Europe/London"
-# TODO Daylight Savings time conversion, when inside measuring area
-"""
-Function expects the header line to be in the following format:
-[w] [w] [w] [start_date] [start_time] [w] [end_date] [end_time] [w] [w] [w] [sample_rate] [w]
-with [w] being any continuous string, which will be ignored
-[start_date] and [end_date] are expected to be YYYY-MM-DD
-whilst times are expected as HH:MM:SS
 
-"""
-def getTimeStamp(headerLine, offsetLine, dayLightSavingsTime):
+
+def getTimeStamp(headerLine, offsetLine, dayLightSavingsTime=False):
+    """
+    getTimeStamp
+    Function expects the header line to be in the following format:
+    [w] [w] [w] [start_date] [start_time] [w] [end_date] [end_time] [w] [w] [w] [sample_rate] [w]
+    with [w] being any continuous string, which will be ignored
+    [start_date] and [end_date] are expected to be YYYY-MM-DD
+    whilst times are expected as HH:MM:SS
+    :param headerLine The line conataining the date information, usually the first line of the file.
+    :param offsetLine How many lines of Values have been read after the initial occurence of the header line.
+    :param dayLightSavingsTime Whether or not daylight savings time changes should be applied to the timestamps.
+    :return Timestamp in the format YYYY-MM-DDThh:mm:ss
+    """
     timeStamp = ""
     headerInfo = str(headerLine).split(" ")
     startDate = headerInfo[3]
@@ -50,6 +55,18 @@ def getTimeStamp(headerLine, offsetLine, dayLightSavingsTime):
 
 
 def header(headerLine, epoch):
+    """
+    header(headerLine, epoch) creates a new header for the output from the existing header  in the following format:
+    "[w1] [w2] [w3] [start_date] [start_time] [-] [end_date] [end_time] [-] [w] [w] [sample_rate] [w]"
+    with [w] being any continuous string, which will be ignored
+    [start_date] and [end_date] are expected to be YYYY-MM-DD
+    whilst times are expected as HH:MM:SS
+    It will then return a header of the format:
+    "Measurement from: [start_date]  [start_time] to [end_date] [end_time]\t[w1] [w2] - sampleRate = [epoch]\tfraction of imputed data
+    :param headerLine: the existing header line from the input file
+    :param epoch: the epoch this file is getting converted to
+    :return: a new header line with the appropriate format
+    """
     oldheaderString = str(headerLine).split(" - ")
     startInfo = datetime.datetime.strptime(oldheaderString[1], '%Y-%m-%d %H:%M:%S')
     endInfo = datetime.datetime.strptime(oldheaderString[2], '%Y-%m-%d %H:%M:%S')
@@ -61,7 +78,19 @@ def header(headerLine, epoch):
     return newHeader
 
 
-def getOutFileName(filename, outdir, epoch, prefix, keepName):
+def getOutFileName(filename, outdir, epoch, prefix="", keepName=False):
+    """
+    Depending on the given arguments this function will create the absolute output path for a file.
+    If no prefix is specified the file name will follow the scheme [old_name]_avg_[epoch].tsv
+    If a prefix is specified the file name will be that prefix, unless keepName is True in which case the file name
+    follows: [prefix]_[old_name].tsv
+    :param filename: input file name (file that is currently being processed
+    :param outdir: output directory for the file
+    :param epoch: the epoch it will convert to. this will be used if no other prefix is specified.
+    :param prefix: the new prefix
+    :param keepName: whether the new file name should contain the old file name
+    :return: string of the absolute path
+    """
     outdir = os.path.realpath(outdir)
     if prefix != "":
         if keepName:
@@ -76,7 +105,24 @@ def getOutFileName(filename, outdir, epoch, prefix, keepName):
 
 
 def workFile(filename, epoch, outdir, prefix="", keepName=False, daylightSavingsTime=False, noConsoleOutput=False):
-    #
+    """
+    workFile is the central function to convert a file with one epoch to another epoch, not overwriting the original data
+    it offers a few options in regards to how the new file should behave. It can be specified, whether a daylight
+    savings time adjusted timestamp should be created, whether no console output should be given in regards to the
+    workings of the file, a new file prefix
+    either with or without the old file name attached can be specified and most importantly output directory and new
+    epoch can be specified
+    :param filename: the absolute path to the file that should be converted
+    :param epoch: the new epoch in seconds to convert to (needs to be a multiple of 5 or 5)
+    :param outdir: relative or absolute path to the output directory
+    :param prefix: a new prefix, which will replace the old filename, when keepName is False, otherwise it will be put
+    in front of the old file name
+    :param keepName: see prefix argument
+    :param daylightSavingsTime: specifies, whether or not there should be an auto adjust for the daylight savings time,
+     if a change from dst to standard time (or inverse) occurs in the raw file
+    :param noConsoleOutput: whether or not the function should output errors or  status messages to the console
+    :return: none
+    """
     # how many lines need to be read to convert one 5 second epoch to the new epoch time EPOCH
     linesNeeded = epoch/EPOCH_TIME
     lineAccumulator = []
@@ -86,7 +132,7 @@ def workFile(filename, epoch, outdir, prefix="", keepName=False, daylightSavings
     headerLine = ""
     outdir = os.path.realpath(outdir)
     extension= os.path.splitext(filename)[1]
-    outputFile = getOutFileName(filename, outdir, epoch, prefix, keepName)  #TODO should they have identical names?
+    outputFile = getOutFileName(filename, outdir, epoch, prefix, keepName)
     # if this file exists already, delete it.
     try:
         os.remove(outputFile)
@@ -113,7 +159,6 @@ def workFile(filename, epoch, outdir, prefix="", keepName=False, daylightSavings
                 # new header output:
                 resultLineAcc.append(header(headerLine, epoch))
                 continue
-                #TODO print header on top of file
             lineAccumulator.append(line)
             lineCount = lineCount + 1
             if (len(lineAccumulator) >= linesNeeded):
@@ -140,7 +185,14 @@ def workFile(filename, epoch, outdir, prefix="", keepName=False, daylightSavings
         file.close()
     # generate new timestamp
 
+
 def epochConversion(lines, timestamp):
+    """
+    Takes a list of lines and a time stamp and creates the average and a overarching time stamp and returns the line
+    :param lines: list of lines to be averaged
+    :param timestamp: a timestamp to be put at the start of a line
+    :return: the average line created form the list of lines
+    """
     imputedCount = 0
     lineCount = 0
     values = []
@@ -157,7 +209,14 @@ def epochConversion(lines, timestamp):
     resultLine = "\n{}\t{}\t{}".format(timestamp, "{0:.1f}".format(average), "{0:.2f}".format(imputedPerc))
     return resultLine
 
-def writePart(outfile, content, noConsoleOutput):
+def writePart(outfile, content, noConsoleOutput=False):
+    """
+    takes a path to a file and appends content  (list of strings) to it
+    :param outfile: absolute path to write to
+    :param content: content that should be appended
+    :param noConsoleOutput: whether errors should be displayed
+    :return: none
+    """
     file = open(outfile, "a")
     try:
         for line in content:
@@ -170,7 +229,12 @@ def writePart(outfile, content, noConsoleOutput):
 
 
 def getFiles(inputFiles):
-
+    """
+    get files takes a plain text file containing paths and will return a list of absolute paths of the paths
+    specified in the file.
+    :param inputFiles: the file containing the paths
+    :return: a list object containing the absolute paths
+    """
     file = open(inputFiles, "r")
     fileList = []
     dir = os.path.dirname(os.path.realpath(inputFiles))
@@ -179,8 +243,11 @@ def getFiles(inputFiles):
     return fileList
 
 
-
 def main():
+    """
+    main function to process a list of files to be converted into a new epoch
+    :return: none
+    """
     parser = argparse.ArgumentParser(description="Epoch Conversion")
     #parser.add_argument("-f", dest= "fileSet",  action='claimInput', const= help= " If this flag is set, IL may be
     #  file locations directly entered into the command line.")
@@ -220,7 +287,14 @@ def main():
             print("ERROR: the specified list of input files of the " + extension + " does not match the required type of .txt")
         return
     # get input files into a list
-    inList = getFiles(inputFiles)
+    try:
+        inList = getFiles(inputFiles)
+        if not args.n:
+            print("STATUS: " + len(inList) + " files were detected and will be converted.")
+    except IOError:
+        if not args.n:
+            print("ERROR: could not read the file of input files "+ inputFiles + ". Please check.")
+        return
     prefix = ""
     if args.p:
         prefix = args.p
@@ -252,6 +326,8 @@ def main():
             else:
                 print("STATUS: Finished file " + file + " , saved in " + outdir + " in " + str(timeUsed))
         index = index +1
+
+
 # main script
 if __name__ == "__main__":
     main()
