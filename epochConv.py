@@ -3,14 +3,14 @@ import gzip
 import datetime
 import os
 import pytz
+import string
 
 EPOCH_TIME = 5 # assumed EPOCH time in previous
 WRITE_BUFFER = 100 # the number of conversions done before the results are logged into the outputfile
 ALLOWED_PLAIN_EXTENSIONS = [".csv", ".txt"] # non compressed file types this script assumes to be able to operate with.
 PREFIX_SET = False
 TIMEZONE = "Europe/London"
-
-#TODO allow to not overwrite data (e.g. that was created successfully before)
+# TODO add output file extension parameter to allow for other file extensions than .tsv
 def getTimeStamp(headerLine, offsetLine, dayLightSavingsTime=False):
     """
     getTimeStamp
@@ -92,18 +92,24 @@ def getOutFileName(filename, outdir, epoch, prefix="", keepName=False):
     :return: string of the absolute path
     """
     outdir = os.path.realpath(outdir)
+    oldname = os.path.splitext(os.path.basename(filename))[0]
+    if filename.endswith(".csv.gz"):
+        # we may expect double endings in the exisitng file name e.g. .csv.gz in case we detect this we need to call
+        # splitext twice to ridden us of the second extension
+        oldname = os.path.splitext(oldname)[0]
     if prefix != "":
         if keepName:
-            outfile = os.path.join(outdir,prefix + "_" +os.path.splitext(os.path.basename(filename))[0] +".tsv")
+            outfile = os.path.join(outdir,prefix + "_" + oldname +".tsv")
         else:
             outfile = os.path.join(outdir, prefix + ".tsv")
     else:
-        outname = os.path.splitext(os.path.basename(filename))[0] + "_avg_{}.tsv".format(epoch)
+        outname = oldname + "_avg_{}.tsv".format(epoch)
         outfile = os.path.join(outdir, outname)
     return outfile
 
 
-
+# TODO acknowledge that for some epochs the last average may not be a true representation, should be done in the
+# documentation, as the code handles "missing" data correctly
 def workFile(filename, epoch, outdir, prefix="", keepName=False, daylightSavingsTime=False, noConsoleOutput=False, noOverwrite=False):
     """
     workFile is the central function to convert a file with one epoch to another epoch, not overwriting the original data
@@ -143,7 +149,7 @@ def workFile(filename, epoch, outdir, prefix="", keepName=False, daylightSavings
         pass
     # find out whether to gzip open or to plain open it
     compressed = False
-    if (extension == ".gz") & (".csv.gz" in os.path.basename(filename)):
+    if (extension == ".gz") & (os.path.basename(filename).endswith(".csv.gz")):
         file = gzip.open(filename, "r")
         compressed = True
     elif (extension in ALLOWED_PLAIN_EXTENSIONS):
@@ -202,7 +208,7 @@ def epochConversion(lines, timestamp):
     imputedPerc = -1
     for line in lines:
         lineContent = str(line).split(",")
-        if len(lineContent) != 2:
+        if len(lineContent) != 2 | (lineContent[0] == ""):
             # the line does not match what we would expect
             continue
         values.append(float(lineContent[0]))
@@ -254,7 +260,7 @@ def getFiles(inputFiles):
         for file in os.listdir(inputFiles):
             fileName = os.path.join(inputFiles, file)
             if (os.path.isfile(fileName) & (
-                    (os.path.splitext(fileName)[1] == ".csv") | (os.path.splitext(fileName)[1] == ".gz"))):
+                    (os.path.splitext(fileName)[1] == ".csv") | (fileName.endswith(".csv.gz")))):
                 fileList.append(fileName)
     return fileList
 
@@ -342,9 +348,9 @@ def main():
         timeUsed = finish - start
         if not args.n:
             if PREFIX_SET:
-                print("STATUS: Finished file " + prefixIndex + " , saved in " + outdir + " in " + str(timeUsed))
+                print("STATUS: Finished file " + prefixIndex + " , saved in " + os.path.abspath(outdir) + " in " + str(timeUsed))
             else:
-                print("STATUS: Finished file " + file + " , saved in " + outdir + " in " + str(timeUsed))
+                print("STATUS: Finished file " + file + " , saved in " + os.path.abspath(outdir) + " in " + str(timeUsed))
         index = index +1
 
 
