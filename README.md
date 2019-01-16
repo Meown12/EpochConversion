@@ -22,7 +22,7 @@ The created output file will overwrite identically named files in the specified 
 Run via the terminal using 
 
 ```
-python epochConv.py [-h] [-p Prefix] [-id] [-d] [-n] [IL] [t] [OD]
+python epochConv.py [-h] [-p Prefix] [-id] [-d] [-n] [-o] [IL] [t] [OD]
 ```
     
 where the arguments represent the following:
@@ -34,6 +34,7 @@ where the arguments represent the following:
    + -d : If this flag is selected the created timestamps for the output will adjust for a change in time due to daylight   
           savings time, meaning the time stamp will reduce or increase by an hour when it encounters the respective time.
    + -n : With this flag set all command line outputs of the script will be suppresed.
+   + -o : If an output file already exists e.g. from a previous run it will be skipped during the conversion.
    + IL : A plain text (.txt) document containing 
           the list of files to be converted. It has to be keept in mind that currently only .csv.gz and .csv are permitted. In future version or branches of this software new file types can be supported, by adding them to the 
    + t : epoch duration to convert to. This should be a
