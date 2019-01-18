@@ -3,6 +3,7 @@ import gzip
 import datetime
 import os
 import pytz
+import traceback
 import string
 
 EPOCH_TIME = 5 # assumed EPOCH time in previous
@@ -344,6 +345,7 @@ def main():
         except FileNotFoundError:
             if not args.n:
                 print("ERROR: The file: " + file + " could not be found under the specified path.")
+                traceback.print_exc()
         finish = datetime.datetime.now()
         timeUsed = finish - start
         if not args.n:
