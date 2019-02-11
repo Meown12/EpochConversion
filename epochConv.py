@@ -12,19 +12,9 @@ ALLOWED_PLAIN_EXTENSIONS = [".csv", ".txt"] # non compressed file types this scr
 PREFIX_SET = False
 TIMEZONE = "Europe/London"
 # TODO add output file extension parameter to allow for other file extensions than .tsv
-def getTimeStamp(headerLine, offsetLine, dayLightSavingsTime=False):
-    """
-    getTimeStamp
-    Function expects the header line to be in the following format:
-    [w] [w] [w] [start_date] [start_time] [w] [end_date] [end_time] [w] [w] [w] [sample_rate] [w]
-    with [w] being any continuous string, which will be ignored
-    [start_date] and [end_date] are expected to be YYYY-MM-DD
-    whilst times are expected as HH:MM:SS
-    :param headerLine The line conataining the date information, usually the first line of the file.
-    :param offsetLine How many lines of Values have been read after the initial occurence of the header line.
-    :param dayLightSavingsTime Whether or not daylight savings time changes should be applied to the timestamps.
-    :return Timestamp in the format YYYY-MM-DDThh:mm:ss
-    """
+
+
+def getTimeStampDT(headerLine, offsetLine,epochTime=EPOCH_TIME, dayLightSavingsTime=False):
     timeStamp = ""
     headerInfo = str(headerLine).split(" ")
     startDate = headerInfo[3]
@@ -34,9 +24,9 @@ def getTimeStamp(headerLine, offsetLine, dayLightSavingsTime=False):
     sample_rate = int(headerInfo[11])
     if sample_rate != EPOCH_TIME:
         raise AttributeError
-    #calculate offset:
+    # calculate offset:
     offsetSec = offsetLine * EPOCH_TIME
-    offset = datetime.timedelta(seconds= offsetSec)
+    offset = datetime.timedelta(seconds=offsetSec)
     startInfo = startDate + " " + startTime
     gmt = pytz.timezone(TIMEZONE)
     startDateTime = datetime.datetime.strptime(startInfo, '%Y-%m-%d %H:%M:%S').astimezone(gmt)
@@ -50,7 +40,23 @@ def getTimeStamp(headerLine, offsetLine, dayLightSavingsTime=False):
         elif ((startDateTime.astimezone(gmt).dst() == oneHour) & (currentTime.astimezone(gmt).dst() == nullTime)):
             # dst ended during the measurement, take one hour off the offset
             currentTime = currentTime - datetime.timedelta(hours=1)
-    timeStamp = currentTime.strftime("%Y-%m-%dT%H:%M:%S")
+    return currentTime
+
+def getTimeStamp(headerLine, offsetLine, dayLightSavingsTime=False):
+    """
+    getTimeStamp
+    Function expects the header line to be in the following format:
+    [w] [w] [w] [start_date] [start_time] [w] [end_date] [end_time] [w] [w] [w] [sample_rate] [w]
+    with [w] being any continuous string, which will be ignored
+    [start_date] and [end_date] are expected to be YYYY-MM-DD
+    whilst times are expected as HH:MM:SS
+    :param headerLine The line conataining the date information, usually the first line of the file.
+    :param offsetLine How many lines of Values have been read after the initial occurence of the header line.
+    :param dayLightSavingsTime Whether or not daylight savings time changes should be applied to the timestamps.
+    :return Timestamp in the format YYYY-MM-DDThh:mm:ss
+    """
+
+    timeStamp = getTimeStampDT(headerLine,offsetLine,dayLightSavingsTime).strftime("%Y-%m-%dT%H:%M:%S")
 
     return timeStamp
 
